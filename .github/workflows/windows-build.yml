@@ -1,10 +1,10 @@
-name: Build Windows EXE
+name: Build Windows EXE (diagnostic)
 
 on:
-  workflow_dispatch: {}         # allows manual run from Actions UI
+  workflow_dispatch: {}
   push:
     tags:
-      - 'v*'                    # optional: build on tags like v1.0
+      - 'v*'
 
 jobs:
   build:
@@ -17,20 +17,43 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'  # or 3.8+ as required
+          python-version: '3.10'
 
-      - name: Install build deps
+      - name: Show Python & pip info
+        run: |
+          python --version
+          python -c "import sys, os; print('exe:', sys.executable); print('cwd:', os.getcwd())"
+          pip --version
+
+      - name: Show PyInstaller availability & tkinter check
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
+          python -c "import tkinter; print('tkinter OK', getattr(tkinter, '__file__', 'builtin'))"
+          pyinstaller --version
+        shell: pwsh
 
-      - name: Build EXE with PyInstaller
-        # Use the same add-data pattern so scripts/ is included in bundle
+      - name: List repository files (verify scripts exists)
         run: |
-          pyinstaller --clean --onefile --windowed --name WinRepairTool --add-data "scripts;scripts" src\gui.py
-        shell: bash
+          Get-ChildItem -Recurse -Force -ErrorAction SilentlyContinue | Select-Object FullName,Length | Out-File files-list.txt -Encoding utf8
+          Get-Content files-list.txt | Select-Object -First 200
+        shell: pwsh
 
-      - name: Upload artifact
+      - name: Build EXE with PyInstaller (verbose)
+        run: |
+          # Use python -m PyInstaller to avoid path ambiguity
+          python -m PyInstaller --clean --onefile --windowed --name WinRepairTool --add-data "scripts;scripts" --log-level=DEBUG src\gui.py > build-pyinstaller.log 2>&1
+          type build-pyinstaller.log | Select-String -Pattern "ERROR", "Traceback", "warning" -Context 0,2 || Write-Host "No immediate errors found in log preview"
+        shell: pwsh
+
+      - name: Upload build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyinstaller-log
+          path: build-pyinstaller.log
+
+      - name: Upload dist artifact (if produced)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: WinRepairTool
