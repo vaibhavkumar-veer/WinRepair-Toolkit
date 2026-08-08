@@ -1,0 +1,27 @@
+﻿name: Build Windows EXE
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --noconsole --name "WinRepairTool" --uac-admin --add-data "scripts;scripts" src/gui.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinRepairTool
+          path: dist/WinRepairTool.exe
